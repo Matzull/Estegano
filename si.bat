@@ -1,0 +1,1 @@
+icpx -fsycl -Wall -O2 .\samples\main.cpp -o .\samples\p.exe && .\samples\p.exe
