@@ -91,19 +91,19 @@ void imRGB2im(t_sRGB *imRGB, uint8_t *im, int &w, int &h)
 // funtion for translate from RGB to YCbCr
 void rgb2ycbcr(t_sRGB *in, t_sYCrCb *out, sycl::queue& Q)
 {
-
-	int w = in->w;
 	out->w = in->w;
 	out->h = in->h;
 
+	auto size = sycl::range<1>(out->w * out->h);
+
 	int index = 0;
 	{
-		sycl::buffer<float, 1> in_buff_R(in->R);
-		sycl::buffer<float, 1> in_buff_G(in->G);
-		sycl::buffer<float, 1> in_buff_B(in->B);
-		sycl::buffer<float, 1> out_buff_Y(out->Y);
-		sycl::buffer<float, 1> out_buff_Cb(out->Cb);
-		sycl::buffer<float, 1> out_buff_Cr(out->Cr);
+		sycl::buffer<float, 1> in_buff_R(in->R, size);
+		sycl::buffer<float, 1> in_buff_G(in->G, size);
+		sycl::buffer<float, 1> in_buff_B(in->B, size);
+		sycl::buffer<float, 1> out_buff_Y(out->Y, size);
+		sycl::buffer<float, 1> out_buff_Cb(out->Cb, size);
+		sycl::buffer<float, 1> out_buff_Cr(out->Cr, size);
 
 		Q.submit([&](sycl::handler &h){
 			sycl::accessor acc_in_R{in_buff_R, h, sycl::read_only};
@@ -114,7 +114,7 @@ void rgb2ycbcr(t_sRGB *in, t_sYCrCb *out, sycl::queue& Q)
 			sycl::accessor acc_out_Cb{out_buff_Cb, h, sycl::write_only};
 			sycl::accessor acc_out_Cr{out_buff_Cr, h, sycl::write_only};
 
-			h.parallel_for(sycl::range<1>(w * h), [=](sycl::id<1> item){
+			h.parallel_for(sycl::range<1>(out->w * out->h), [=](sycl::id<1> item){
 				acc_out_Y[item] = 0.299 * acc_in_R[item] + 0.587 * acc_in_G[item] + 0.114 * acc_in_B[item];
 				acc_out_Cb[item] = 128.0 + 0.5 * acc_in_R[item] - 0.418688 * acc_in_G[item] - 0.081312 * acc_in_B[item];
 				acc_out_Cr[item] = 128.0 - 0.168736 * acc_in_R[item] - 0.3331264 * acc_in_G[item] + 0.5 * acc_in_B[item];
@@ -122,6 +122,24 @@ void rgb2ycbcr(t_sRGB *in, t_sYCrCb *out, sycl::queue& Q)
 		}).wait();
 	};
 }
+
+// void rgb2ycbcr(t_sRGB *in, t_sYCrCb *out)
+// {
+
+// 	int w = in->w;
+// 	out->w = in->w;
+// 	out->h = in->h;
+
+// 	for (int i = 0; i < in->h; i++) {
+// 		for (int j = 0; j < in->w; j++) {
+
+// 			// Use standard coeficient
+// 			out->Y[i*w+j]  =         0.299*in->R[i*w+j]     + 0.587*in->G[i*w+j]      + 0.114*in->B[i*w+j];
+// 			out->Cr[i*w+j] = 128.0 - 0.168736*in->R[i*w+j]  - 0.3331264*in->G[i*w+j]  + 0.5*in->B[i*w+j] ;
+// 			out->Cb[i*w+j] = 128.0 + 0.5*in->R[i*w+j]       - 0.418688*in->G[i*w+j]   - 0.081312*in->B[i*w+j];
+// 		}
+// 	}
+// }
 
 // function for translate YCbCr to RGB
 void ycbcr2rgb(t_sYCrCb *in, t_sRGB *out)
