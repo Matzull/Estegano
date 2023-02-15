@@ -19,8 +19,8 @@ struct sYCrCb {
 };
 typedef struct sYCrCb t_sYCrCb;
 
-void encoder(char *file_in, char *file_out, char *msg, int msg_len);
-void decoder(char *file_in, char *msg_decoded, int msg_len);
+void encoder(char *file_in, char *file_out, char *msg, int msg_len, sycl::queue &Q);
+void decoder(char *file_in, char *msg_decoded, int msg_len, sycl::queue &Q);
 
 #endif
 

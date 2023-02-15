@@ -2,8 +2,21 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <sycl/sycl.hpp>
+
 #include "stegano_routines.h"
 #include "io_routines.h"
+
+using std::cout;
+using std::endl;
+
+void syclInit(sycl::queue &Q)
+{
+	sycl::device d;
+	d = sycl::device(sycl::default_selector());
+	Q = sycl::queue(d);
+	cout << "Using " << d.get_info<sycl::info::device::name>() << endl;
+}
 
 int main(int argc, char **argv)
 {
@@ -23,13 +36,18 @@ int main(int argc, char **argv)
 	int msg_len;
 	get_msg(file_logo, &msg, &msg_len);
 
+	//Initialize queue and device
+	sycl::queue Q;
+	syclInit(Q);
+
 	// Encode the msg into image
-	encoder(file_in, file_out, msg, msg_len);
+	encoder(file_in, file_out, msg, msg_len, Q);
 
 	// Extract msg from image
 	msg_decoded = (char*)malloc(msg_len);
-	decoder(file_out, msg_decoded, msg_len);
-	msg2logo("logo_out.png", msg_decoded, msg_len);
+	decoder(file_out, msg_decoded, msg_len, Q);
+	char output_path[20] = "logo_out.png";
+	msg2logo(output_path, msg_decoded, msg_len);
 
 	return(0);
 }

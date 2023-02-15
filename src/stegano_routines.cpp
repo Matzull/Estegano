@@ -10,17 +10,6 @@
 
 #define M_PI 3.14159265358979323846 /* pi */
 
-using std::cout;
-using std::endl;
-
-void syclInit(sycl::queue &Q)
-{
-	sycl::device d;
-	d = sycl::device(sycl::default_selector());
-	Q = sycl::queue(d);
-	cout << "Using " << d.get_info<sycl::info::device::name>() << endl;
-}
-
 void im2imRGB(uint8_t *im, int w, int h, t_sRGB *imRGB)
 {
 	imRGB->w = w;
@@ -123,24 +112,6 @@ void rgb2ycbcr(t_sRGB *in, t_sYCrCb *out, sycl::queue& Q)
 	};
 }
 
-// void rgb2ycbcr(t_sRGB *in, t_sYCrCb *out)
-// {
-
-// 	int w = in->w;
-// 	out->w = in->w;
-// 	out->h = in->h;
-
-// 	for (int i = 0; i < in->h; i++) {
-// 		for (int j = 0; j < in->w; j++) {
-
-// 			// Use standard coeficient
-// 			out->Y[i*w+j]  =         0.299*in->R[i*w+j]     + 0.587*in->G[i*w+j]      + 0.114*in->B[i*w+j];
-// 			out->Cr[i*w+j] = 128.0 - 0.168736*in->R[i*w+j]  - 0.3331264*in->G[i*w+j]  + 0.5*in->B[i*w+j] ;
-// 			out->Cb[i*w+j] = 128.0 + 0.5*in->R[i*w+j]       - 0.418688*in->G[i*w+j]   - 0.081312*in->B[i*w+j];
-// 		}
-// 	}
-// }
-
 // function for translate YCbCr to RGB
 void ycbcr2rgb(t_sYCrCb *in, t_sRGB *out)
 {
@@ -178,75 +149,167 @@ void ycbcr2rgb(t_sYCrCb *in, t_sRGB *out)
 	}
 }
 
-void get_dct8x8_params(float *mcosine, float *alpha)
+void im2ycbcr(
+				sycl::buffer<float, 1>& imgIn, 
+				sycl::buffer<float, 1>& imgX, 
+				sycl::buffer<float, 1>& imgY, 
+				sycl::buffer<float, 1>& imgZ,
+				int w, int h,
+				sycl::queue& Q
+			)
+{
+	{
+		Q.submit([&](sycl::handler &h){
+			sycl::accessor acc_imgIn{in_buff_R, h, sycl::read_only};
+			sycl::accessor acc_out_Y{imgX, h, sycl::write_only};
+			sycl::accessor acc_out_Cb{imgY, h, sycl::write_only};
+			sycl::accessor acc_out_Cr{imgZ, h, sycl::write_only};
+
+			h.parallel_for(sycl::range<1>(h * w), [=](sycl::id<1> item){
+				auto t_i = item + item + item;
+				acc_out_Y[item] = 0.299 * acc_imgIn[t_i] + 0.587 * acc_imgIn[t_i + 1] + 0.114 * acc_imgIn[t_i + 2];
+				acc_out_Cb[item] = 128.0 + 0.5 * acc_imgIn[t_i] - 0.418688 * acc_imgIn[t_i + 1] - 0.081312 * acc_imgIn[t_i + 2];
+				acc_out_Cr[item] = 128.0 - 0.168736 * acc_imgIn[t_i] - 0.3331264 * acc_imgIn[t_i + 1] + 0.5 * acc_imgIn[t_i + 2];
+			});
+		}).wait();
+	};	
+}
+
+void ycbcr2im(	
+				sycl::buffer<float, 1>& imgOut, 
+				sycl::buffer<float, 1>& imgX, 
+				sycl::buffer<float, 1>& imgY, 
+				sycl::buffer<float, 1>& imgZ,
+				int w, int h,
+				sycl::queue& Q
+			)
+{
+	{
+		Q.submit([&](sycl::handler &h){
+			sycl::accessor acc_imgOut{in_buff_R, h, sycl::read_only};
+			sycl::accessor acc_out_Y{imgX, h, sycl::write_only};
+			sycl::accessor acc_out_Cb{imgY, h, sycl::write_only};
+			sycl::accessor acc_out_Cr{imgZ, h, sycl::write_only};
+
+			h.parallel_for(sycl::range<1>(h * w), [=](sycl::id<1> item){
+				auto t_i = item + item + item;
+				
+				acc_imgOut[t_i] 	= sycl::clamp(acc_out_Y[item] + 1.402 * (acc_out_Cb[item] - 128.0), 0, 255);
+				acc_imgOut[t_i + 1] = sycl::clamp(acc_out_Y[item] - 0.34414 * (acc_out_Cr[item] - 128.0) - 0.71414 * (acc_out_Cb[item] - 128.0), 0, 255);
+				acc_imgOut[t_i + 2] = sycl::clamp(acc_out_Y[item] + 1.772 * (acc_out_Cr[item] - 128.0), 0, 255);
+			});
+		}).wait();
+	};
+}
+
+void get_dct8x8_params(sycl::buffer<float, 1>& mcosine, sycl::buffer<float, 1>& alpha, sycl::queue& Q)
 {
 	int bM = 8;
 	int bN = 8;
 
-	for (int i = 0; i < bM; i++)
-		for (int j = 0; j < bN; j++)
-			mcosine[i * bN + j] = cos(((2 * i + 1) * M_PI * j) / (2 * bM));
+	{
+		Q.submit([&](sycl::handler &h){
+			sycl::accessor acc_mcosine{mcosine, h, sycl::read_write};
+			sycl::accessor acc_alpha{alpha, h, sycl::read_write};
 
-	alpha[0] = 1 / sqrt(bM * 1.0f);
-	for (int i = 1; i < bM; i++)
-		alpha[i] = sqrt(2.0f) / sqrt(bM * 1.0f);
+			h.single_task([=](sycl::id<1> item){
+				for (int i = 0; i < bM; i++)
+				for (int j = 0; j < bN; j++)
+				{
+					acc_mcosine[i * bN + j] = cos(((2 * i + 1) * M_PI * j) / (2 * bM));
+				}
+				alpha[0] = 1 / sqrt(bM * 1.0f);
+				for (int i = 1; i < bM; i++)
+				{
+					acc_alpha[i] = sqrt(2.0f) / sqrt(bM * 1.0f);
+				}
+			});
+		}).wait();
+	};
+	
 }
 
 // function for DCT. Picture divide block size 8x8
-void dct8x8_2d(float *in, float *out, int width, int height, float *mcosine, float *alpha)
+void dct8x8_2d(
+				sycl::buffer<float, 1>& in,
+				sycl::buffer<float, 1>& out,
+				int width, int height,
+				sycl::buffer<float, 1>& mcosine,
+				sycl::buffer<float, 1>& alpha,
+				sycl::queue& Q
+			)
 {
-	int bM = 8;
-	int bN = 8;
+	const int bM = 8;
+	const int bN = 8;
 
-	for (int bi = 0; bi < height / bM; bi++)
 	{
-		int stride_i = bi * bM;
-		for (int bj = 0; bj < width / bN; bj++)
-		{
-			int stride_j = bj * bN;
-			for (int i = 0; i < bM; i++)
-			{
-				for (int j = 0; j < bN; j++)
+		Q.submit([&](sycl::handler &h){
+
+			sycl::accessor acc_in{in, h, sycl::read_write};
+			sycl::accessor acc_out{out, h, sycl::read_write};
+			sycl::accessor acc_mcosine{mcosine, h, sycl::read_write};
+			sycl::accessor acc_alpha{alpha, h, sycl::read_write};
+
+			h.parallel_for(sycl::range<2>(width / bN, heigth / bM), [=](sycl::id<2> item){
+				auto stride_i = item[0] * bM;
+				auto stride_j = item[1] * bN;
+				for (int i = 0; i < bM; i++)
 				{
-					float tmp = 0.0;
-					for (int ii = 0; ii < bM; ii++)
+					for (int j = 0; j < bN; j++)
 					{
-						for (int jj = 0; jj < bN; jj++)
-							tmp += in[(stride_i + ii) * width + stride_j + jj] * mcosine[ii * bN + i] * mcosine[jj * bN + j];
+						float tmp = 0.0;
+						for (int ii = 0; ii < bM; ii++)
+						{
+							for (int jj = 0; jj < bN; jj++)
+								tmp += acc_in[(stride_i + ii) * width + stride_j + jj] * acc_mcosine[ii * bN + i] * acc_mcosine[jj * bN + j];
+						}
+						acc_out[(stride_i + i) * width + stride_j + j] = tmp * acc_alpha[i] * acc_alpha[j];
 					}
-					out[(stride_i + i) * width + stride_j + j] = tmp * alpha[i] * alpha[j];
-				}
-			}
-		}
-	}
+				}		
+			});
+		}).wait();
+	};
 }
 
-void idct8x8_2d(float *in, float *out, int width, int height, float *mcosine, float *alpha)
+void idct8x8_2d(
+				sycl::buffer<float, 1>& in,
+				sycl::buffer<float, 1>& out,
+				int width, int height,
+				sycl::buffer<float, 1>& mcosine,
+				sycl::buffer<float, 1>& alpha,
+				sycl::queue& Q
+			)
 {
 	int bM = 8;
 	int bN = 8;
 
-	for (int bi = 0; bi < height / bM; bi++)
 	{
-		int stride_i = bi * bM;
-		for (int bj = 0; bj < width / bN; bj++)
-		{
-			int stride_j = bj * bN;
-			for (int i = 0; i < bM; i++)
-			{
-				for (int j = 0; j < bN; j++)
+		Q.submit([&](sycl::handler &h){
+
+			sycl::accessor acc_in{in, h, sycl::read_write};
+			sycl::accessor acc_out{out, h, sycl::read_write};
+			sycl::accessor acc_mcosine{mcosine, h, sycl::read_write};
+			sycl::accessor acc_alpha{alpha, h, sycl::read_write};
+
+			h.parallel_for(sycl::range<2>(width / bN, height / bM), [=](sycl::id<2> item){
+				int stride_i = item[0] * bM;
+				int stride_j = item[1] * bN;
+				for (int i = 0; i < bM; i++)
 				{
-					float tmp = 0.0;
-					for (int ii = 0; ii < bM; ii++)
+					for (int j = 0; j < bN; j++)
 					{
-						for (int jj = 0; jj < bN; jj++)
-							tmp += in[(stride_i + ii) * width + stride_j + jj] * mcosine[i * bN + ii] * mcosine[j * bN + jj] * alpha[ii] * alpha[jj];
+						float tmp = 0.0;
+						for (int ii = 0; ii < bM; ii++)
+						{
+							for (int jj = 0; jj < bN; jj++)
+								tmp += acc_in[(stride_i + ii) * width + stride_j + jj] * acc_mcosine[i * bN + ii] * acc_mcosine[j * bN + jj] * acc_alpha[ii] * acc_alpha[jj];
+						}
+						acc_out[(stride_i + i) * width + stride_j + j] = tmp;
 					}
-					out[(stride_i + i) * width + stride_j + j] = tmp;
-				}
-			}
-		}
-	}
+				}	
+			});
+		}).wait();
+	};
 }
 
 void insert_msg(float *img, int width, int height, char *msg, int msg_length)
@@ -266,6 +329,7 @@ void insert_msg(float *img, int width, int height, char *msg, int msg_length)
 		printf("Image not enough to save message!!!\n");
 
 	for (int c = 0; c < msg_length; c++)
+	{
 		for (int b = 0; b < 8; b++)
 		{
 			char ch = msg[c];
@@ -281,8 +345,6 @@ void insert_msg(float *img, int width, int height, char *msg, int msg_length)
 			}
 			float mean = tmp / (bM * bN);
 
-			//			img[(bi+i_insert)*width + bj+j_insert] = (float)(bit)*img[(bi+i_insert)*width + bj+j_insert];
-
 			if (bit)
 				img[(stride_i + i_insert) * width + stride_j + j_insert] = fabsf(mean); //+
 			else
@@ -294,7 +356,9 @@ void insert_msg(float *img, int width, int height, char *msg, int msg_length)
 				bj = 0;
 				bi++;
 			}
-		}
+		}		
+	}
+		
 }
 
 void extract_msg(float *img, int width, int height, char *msg, int msg_length)
@@ -346,107 +410,84 @@ void extract_msg(float *img, int width, int height, char *msg, int msg_length)
 	}
 }
 
-void encoder(char *file_in, char *file_out, char *msg, int msg_len)
+void encoder(char *file_in, char *file_out, char *msg, int msg_len, sycl::queue &Q)
 {
 
 	int w, h, bytesPerPixel;
 
 	// im corresponds to R0G0B0,R1G1B1.....
 	uint8_t *im = (uint8_t *)loadPNG(file_in, &w, &h);
-
-	// Create imRGB & imYCrCb
 	uint8_t *im_out = (uint8_t *)malloc(3 * w * h * sizeof(uint8_t));
-	t_sRGB imRGB;
-	imRGB.R = (float *)malloc(w * h * sizeof(float));
-	imRGB.G = (float *)malloc(w * h * sizeof(float));
-	imRGB.B = (float *)malloc(w * h * sizeof(float));
-	t_sYCrCb imYCrCb;
-	imYCrCb.Y = (float *)malloc(w * h * sizeof(float));
-	imYCrCb.Cr = (float *)malloc(w * h * sizeof(float));
-	imYCrCb.Cb = (float *)malloc(w * h * sizeof(float));
-	float *Ydct = (float *)malloc(w * h * sizeof(float));
+	{
+		auto size = sycl::range<1>(w * h);
+		sycl::buffer<float, 1> imgIn(im, size);
+		sycl::buffer<float, 1> imgX(size);
+		sycl::buffer<float, 1> imgY(size);
+		sycl::buffer<float, 1> imgZ(size);
+		sycl::buffer<float, 1> imgOut(size);
+		sycl::buffer<float, 1> Ydct(sycl::range<1>(w * h));
+		sycl::buffer<float, 1> mcosine(sycl::range<1>(8 * 8));
+		sycl::buffer<float, 1> alpha(sycl::range<1>(8));
+		
+		// Create imRGB & imYCrCb
+		
+		get_dct8x8_params(mcosine, alpha, Q);
 
-	float *mcosine = (float *)malloc(8 * 8 * sizeof(float));
-	float *alpha = (float *)malloc(8 * sizeof(float));
-	get_dct8x8_params(mcosine, alpha);
+		double start = omp_get_wtime();
 
-	sycl::queue Q;
-	syclInit(Q);
+		// im2imRGB(im, w, h, &imRGB);
+		// rgb2ycbcr(&imRGB, &imYCrCb, Q);
+		im2ycbcr(imgIn, imgX, imgY, imgZ, w, h, Q);
+		dct8x8_2d(imgX, Ydct, w, h, mcosine, alpha, Q);
 
-	double start = omp_get_wtime();
+		// Insert Message
+		insert_msg(Ydct, imYCrCb.w, imYCrCb.h, msg, msg_len);
 
-	im2imRGB(im, w, h, &imRGB);
-	rgb2ycbcr(&imRGB, &imYCrCb, Q);
-	dct8x8_2d(imYCrCb.Y, Ydct, imYCrCb.w, imYCrCb.h, mcosine, alpha);
+		idct8x8_2d(imgX, Ydct, w, h, mcosine, alpha, Q);
+		// ycbcr2rgb(&imYCrCb, &imRGB);
+		// imRGB2im(&imRGB, im_out, w, h);
+		ycbcr2im(imgOut, imgX, imgY, imgZ, w, h, Q);
 
-	// Insert Message
-	insert_msg(Ydct, imYCrCb.w, imYCrCb.h, msg, msg_len);
+		double stop = omp_get_wtime();
+		printf("Encoding time=%f sec.\n", stop - start);
 
-	idct8x8_2d(Ydct, imYCrCb.Y, imYCrCb.w, imYCrCb.h, mcosine, alpha);
-	ycbcr2rgb(&imYCrCb, &imRGB);
-	imRGB2im(&imRGB, im_out, w, h);
-
-	double stop = omp_get_wtime();
-	printf("Encoding time=%f sec.\n", stop - start);
-
-	savePNG(file_out, im_out, w, h);
-
-	free(imRGB.R);
-	free(imRGB.G);
-	free(imRGB.B);
-	free(imYCrCb.Y);
-	free(imYCrCb.Cr);
-	free(imYCrCb.Cb);
-	free(Ydct);
-	free(mcosine);
-	free(alpha);
+		savePNG(file_out, im_out, w, h);
+	};
 }
 
-void decoder(char *file_in, char *msg_decoded, int msg_len)
+void decoder(char *file_in, char *msg_decoded, int msg_len, sycl::queue &Q)
 {
 
 	int w, h, bytesPerPixel;
 
-	// im corresponds to R0G0B0,R1G1B1.....
 	uint8_t *im = (uint8_t *)loadPNG(file_in, &w, &h);
-
-	// Create imRGB & imYCrCb
 	uint8_t *im_out = (uint8_t *)malloc(3 * w * h * sizeof(uint8_t));
-	t_sRGB imRGB;
-	imRGB.R = (float *)malloc(w * h * sizeof(float));
-	imRGB.G = (float *)malloc(w * h * sizeof(float));
-	imRGB.B = (float *)malloc(w * h * sizeof(float));
-	t_sYCrCb imYCrCb;
-	imYCrCb.Y = (float *)malloc(w * h * sizeof(float));
-	imYCrCb.Cr = (float *)malloc(w * h * sizeof(float));
-	imYCrCb.Cb = (float *)malloc(w * h * sizeof(float));
-	float *Ydct = (float *)malloc(w * h * sizeof(float));
 
-	float *mcosine = (float *)malloc(8 * 8 * sizeof(float));
-	float *alpha = (float *)malloc(8 * sizeof(float));
-	get_dct8x8_params(mcosine, alpha);
+	{
+		auto size = sycl::range<1>(w * h);
+		sycl::buffer<float, 1> imgIn(im, size);
+		sycl::buffer<float, 1> imgX(size);
+		sycl::buffer<float, 1> imgY(size);
+		sycl::buffer<float, 1> imgZ(size);
+		sycl::buffer<float, 1> imgOut(size);
+		sycl::buffer<float, 1> Ydct(sycl::range<1>(w * h));
+		sycl::buffer<float, 1> mcosine(sycl::range<1>(8 * 8));
+		sycl::buffer<float, 1> alpha(sycl::range<1>(8));
+		
+		// Create imRGB & imYCrCb
 
-	sycl::queue Q;
-	syclInit(Q);
+		get_dct8x8_params(mcosine, alpha, Q);
 
-	double start = omp_get_wtime();
+		double start = omp_get_wtime();
 
-	im2imRGB(im, w, h, &imRGB);
-	rgb2ycbcr(&imRGB, &imYCrCb, Q);
-	dct8x8_2d(imYCrCb.Y, Ydct, imYCrCb.w, imYCrCb.h, mcosine, alpha);
+		// im2imRGB(im, w, h, &imRGB);
+		// rgb2ycbcr(&imRGB, &imYCrCb, Q);
+		im2ycbcr(imgIn, imgX, imgY, imgZ, w, h, Q);
+		dct8x8_2d(imgX, Ydct, w, h, mcosine, alpha, Q);
 
-	extract_msg(Ydct, imYCrCb.w, imYCrCb.h, msg_decoded, msg_len);
+		extract_msg(Ydct, imYCrCb.w, imYCrCb.h, msg_decoded, msg_len);
 
-	double stop = omp_get_wtime();
-	printf("Decoding time=%f sec.\n", stop - start);
-
-	free(imRGB.R);
-	free(imRGB.G);
-	free(imRGB.B);
-	free(imYCrCb.Y);
-	free(imYCrCb.Cr);
-	free(imYCrCb.Cb);
-	free(Ydct);
-	free(mcosine);
-	free(alpha);
+		double stop = omp_get_wtime();
+		printf("Decoding time=%f sec.\n", stop - start);
+	};
 }
