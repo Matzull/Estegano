@@ -1,1 +1,1 @@
-icpx -fsycl -fopenmp -Wall -Ofast -g -pedantic -ferror-limit=256 .\src\main.cpp .\src\io_routines.cpp .\src\stegano_routines.cpp -o .\builds\stegano.exe && .\builds\stegano.exe .\imgs\image_skyscraper.png .\imgs\logo_out.png .\imgs\Out\myout.png
+icpx -fsycl -fopenmp -Wall -Ofast -g -ferror-limit=256 .\src\main.cpp .\src\io_routines.cpp .\src\stegano_routines.cpp -o .\builds\stegano.exe && .\builds\stegano.exe .\imgs\image_skyscraper.png .\imgs\logo_out.png .\imgs\Out\myout.png

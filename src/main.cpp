@@ -13,7 +13,7 @@ using std::endl;
 void syclInit(sycl::queue &Q)
 {
 	sycl::device d;
-	d = sycl::device(sycl::default_selector());
+	d = sycl::device{sycl::default_selector_v};
 	Q = sycl::queue(d);
 	cout << "Using " << d.get_info<sycl::info::device::name>() << endl;
 }

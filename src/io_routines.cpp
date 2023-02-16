@@ -48,7 +48,6 @@ void msg2logo(char *file_name, char *msg_decoded, int msg_len)
 
 	int logo_size = (int)roundf(sqrtf(8.0f*msg_len));
 
-	int imsg = 0;
 	uint8_t pixel;
 	for (int imsg=0; imsg<msg_len; imsg++){
 		char byte = msg_decoded[imsg];
