@@ -16,7 +16,7 @@ float clamp(float value, float min, float max)
 }
 
 void im2ycbcr(
-				sycl::buffer<float, 1>& imgIn, 
+				sycl::buffer<uint8_t, 1>& imgIn, 
 				sycl::buffer<float, 1>& imgX, 
 				sycl::buffer<float, 1>& imgY, 
 				sycl::buffer<float, 1>& imgZ,
@@ -26,23 +26,18 @@ void im2ycbcr(
 {      
 	{
 		Q.submit([&](sycl::handler &h){
-			printf("Line: %d\n", __LINE__);
 			sycl::accessor acc_imgIn{imgIn, h, sycl::read_only};
 			sycl::accessor acc_out_Y{imgX, h, sycl::write_only};
 			sycl::accessor acc_out_Cb{imgY, h, sycl::write_only};
 			sycl::accessor acc_out_Cr{imgZ, h, sycl::write_only};
-			printf("Line: %d\n", __LINE__);
 			h.parallel_for(sycl::range<1>(height * width), [=](sycl::id<1> item){
-				auto t_i = item + item + item;
+				int t_i = item + item + item;
 				acc_out_Y[item] = 0.299 * acc_imgIn[t_i] + 0.587 * acc_imgIn[t_i + 1] + 0.114 * acc_imgIn[t_i + 2];
 				acc_out_Cb[item] = 128.0 + 0.5 * acc_imgIn[t_i] - 0.418688 * acc_imgIn[t_i + 1] - 0.081312 * acc_imgIn[t_i + 2];
 				acc_out_Cr[item] = 128.0 - 0.168736 * acc_imgIn[t_i] - 0.3331264 * acc_imgIn[t_i + 1] + 0.5 * acc_imgIn[t_i + 2];
 			});
-			printf("Line: %d\n", __LINE__);
 		}).wait();
-		printf("Line: %d\n", __LINE__);
 	};
-	printf("Line: %d\n", __LINE__);
 }
 
 void ycbcr2im(	
@@ -114,15 +109,15 @@ void dct8x8_2d(
 
 	{
 		Q.submit([&](sycl::handler &h){
-
+			printf("Line: %d\n", __LINE__);
 			sycl::accessor acc_in{in, h, sycl::read_write};
 			sycl::accessor acc_out{out, h, sycl::read_write};
 			sycl::accessor acc_mcosine{mcosine, h, sycl::read_write};
 			sycl::accessor acc_alpha{alpha, h, sycl::read_write};
-
-			h.parallel_for(sycl::range<2>(width / bN, height / bM), [=](sycl::id<2> item){
-				auto stride_i = item[0] * bM;
-				auto stride_j = item[1] * bN;
+			printf("Line: %d\n", __LINE__);
+			h.parallel_for(sycl::range<2>(width / (bN + 2), height / (bM + 2)), [=](sycl::id<2> item){
+				auto stride_i = int(item[0] * bM);
+				auto stride_j = int(item[1] * bN);
 				for (int i = 0; i < bM; i++)
 				{
 					for (int j = 0; j < bN; j++)
@@ -131,13 +126,16 @@ void dct8x8_2d(
 						for (int ii = 0; ii < bM; ii++)
 						{
 							for (int jj = 0; jj < bN; jj++)
+							{
 								tmp += acc_in[(stride_i + ii) * width + stride_j + jj] * acc_mcosine[ii * bN + i] * acc_mcosine[jj * bN + j];
+							}
 						}
 						acc_out[(stride_i + i) * width + stride_j + j] = tmp * acc_alpha[i] * acc_alpha[j];
 					}
 				}		
 			});
 		}).wait();
+		printf("Line: %d\n", __LINE__);
 	};
 }
 
@@ -309,12 +307,12 @@ void encoder(char *file_in, char *file_out, char *c_msg, int msg_len, sycl::queu
 
 	int w, h;
 	// im corresponds to R0G0B0,R1G1B1.....
-	float *im = (float *)loadPNG(file_in, &w, &h);
+	uint8_t *im = (uint8_t *)loadPNG(file_in, &w, &h);
 	float *im_out = (float *)malloc(3 * w * h * sizeof(float));
 	{
 		printf("Line: %d\n", __LINE__);
 		auto size = sycl::range<1>(w * h);
-		sycl::buffer<float, 1> imgIn(im, size);
+		sycl::buffer<uint8_t, 1> imgIn(im, size);
 		sycl::buffer<float, 1> imgX(size);
 		sycl::buffer<float, 1> imgY(size);
 		sycl::buffer<float, 1> imgZ(size);
@@ -334,18 +332,20 @@ void encoder(char *file_in, char *file_out, char *c_msg, int msg_len, sycl::queu
 		// rgb2ycbcr(&imRGB, &imYCrCb, Q);
 		printf("Line: %d\n", __LINE__);
 		im2ycbcr(imgIn, imgX, imgY, imgZ, w, h, Q);
+		printf("Line: %d\n", __LINE__);
 		dct8x8_2d(imgX, Ydct, w, h, mcosine, alpha, Q);
 		printf("Line: %d\n", __LINE__);
 
 		// Insert Message
 		insert_msg(Ydct, w, h, msg, msg_len, Q);
+		printf("Line: %d\n", __LINE__);
 
 		idct8x8_2d(imgX, Ydct, w, h, mcosine, alpha, Q);
 		// ycbcr2rgb(&imYCrCb, &imRGB);
 		// imRGB2im(&imRGB, im_out, w, h);
 		printf("Line: %d\n", __LINE__);
 		ycbcr2im(imgOut, imgX, imgY, imgZ, w, h, Q);
-
+		printf("Line: %d\n", __LINE__);
 		double stop = omp_get_wtime();
 		printf("Encoding time=%f sec.\n", stop - start);
 
@@ -358,12 +358,17 @@ void decoder(char *file_in, char *msg_decoded, int msg_len, sycl::queue &Q)
 
 	int w, h;
 
-	float *im = (float *)loadPNG(file_in, &w, &h);
+	uint8_t *im = (uint8_t *)loadPNG(file_in, &w, &h);
+	for (int i = 0; i < 10; i++)
+	{
+		printf("RGB: %d %d %d", im[i], im[i+1], im[i+2]);
+	}
+	
 	float *im_out = (float *)malloc(3 * w * h * sizeof(float));
 
 	{
 		auto size = sycl::range<1>(w * h);
-		sycl::buffer<float, 1> imgIn(im, size);
+		sycl::buffer<uint8_t, 1> imgIn(im, size);
 		sycl::buffer<float, 1> imgX(size);
 		sycl::buffer<float, 1> imgY(size);
 		sycl::buffer<float, 1> imgZ(size);
