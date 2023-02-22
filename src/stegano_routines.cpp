@@ -309,37 +309,60 @@ void encoder(char *file_in, char *file_out, char *c_msg, int msg_len, sycl::queu
 	uint8_t *im = (uint8_t *)loadPNG(file_in, &w, &h);
 	uint8_t *im_out = (uint8_t *)malloc(3 * w * h * sizeof(uint8_t));
 	{
-		auto size = sycl::range<1>(w * h);
-		sycl::buffer<uint8_t, 1> imgIn(im, size);
-		sycl::buffer<float, 1> imgX(size);
-		sycl::buffer<float, 1> imgY(size);
-		sycl::buffer<float, 1> imgZ(size);
-		sycl::buffer<uint8_t, 1> imgOut(im_out, size);
-		sycl::buffer<float, 1> Ydct(sycl::range<1>(w * h));
-		sycl::buffer<float, 1> mcosine(sycl::range<1>(8 * 8));
-		sycl::buffer<float, 1> alpha(sycl::range<1>(8));
-		sycl::buffer<char, 1> msg(c_msg, sycl::range<1>(msg_len));
+		// auto size = sycl::range<1>(w * h);
+		// sycl::buffer<uint8_t, 1> imgIn(im, size);
+		// sycl::buffer<float, 1> imgX(size);
+		// sycl::buffer<float, 1> imgY(size);
+		// sycl::buffer<float, 1> imgZ(size);
+		// sycl::buffer<uint8_t, 1> imgOut(im_out, size);
+		// sycl::buffer<float, 1> Ydct(sycl::range<1>(w * h));
+		// sycl::buffer<float, 1> mcosine(sycl::range<1>(8 * 8));
+		// sycl::buffer<float, 1> alpha(sycl::range<1>(8));
+		// sycl::buffer<char, 1> msg(c_msg, sycl::range<1>(msg_len));
+
+		uint8_t* _imgIn = sycl::malloc_device<uint8_t>(w * h, Q);//memset
+		float* _imgX = sycl::malloc_device<float>(w * h, Q);
+		float* _imgY = sycl::malloc_device<float>(w * h, Q);
+		float* _imgZ = sycl::malloc_device<float>(w * h, Q);
+		uint8_t* _imgOut = sycl::malloc_device<uint8_t>(w * h, Q);
+		float* _Ydct = sycl::malloc_device<float>(w * h, Q);
+		float* _mcosine = sycl::malloc_device<float>(8 * 8, Q);
+		float* _alpha = sycl::malloc_device<float>(8, Q);
+		char* _msg = sycl::malloc_device<char>(msg_len, Q);
+
+		Q.memcpy(_imgIn, im, sizeof(uint8_t) * (w * h));
+
 		
 		// Create imRGB & imYCrCb
-		get_dct8x8_params(mcosine, alpha, Q);
+		get_dct8x8_params(_mcosine, _alpha, Q);
 		double start = omp_get_wtime();
 
-		im2ycbcr(imgIn, imgX, imgY, imgZ, w, h, Q);
-		dct8x8_2d(imgX, Ydct, w, h, mcosine, alpha, Q);
+		im2ycbcr(_imgIn, _imgX, _imgY, _imgZ, w, h, Q);
+		dct8x8_2d(_imgX, _Ydct, w, h, _mcosine, _alpha, Q);
 
 		// Insert Message
-		insert_msg(Ydct, w, h, msg, msg_len, Q);
+		insert_msg(_Ydct, w, h, _msg, msg_len, Q);
 
-		idct8x8_2d(imgX, Ydct, w, h, mcosine, alpha, Q);
-		// ycbcr2rgb(&imYCrCb, &imRGB);
-		// imRGB2im(&imRGB, im_out, w, h);
-		printf("Line: %d\n", __LINE__);
-		ycbcr2im(imgOut, imgX, imgY, imgZ, w, h, Q);
-		printf("Line: %d\n", __LINE__);
+		idct8x8_2d(_imgX, _Ydct, w, h, _mcosine, _alpha, Q);
+ 
+		ycbcr2im(_imgOut, _imgX, _imgY, _imgZ, w, h, Q);
+
 		double stop = omp_get_wtime();
 		printf("Encoding time=%f sec.\n", stop - start);
 
+		Q.memcpy(im_out, _imgOut, sizeof(uint8_t) * (w * h));
+
 		savePNG(file_out, (uint8_t*)im_out, w, h);
+
+		sycl::free(_imgIn, Q);
+		sycl::free(_imgOut, Q);
+		sycl::free(_imgX, Q);
+		sycl::free(_imgY, Q);
+		sycl::free(_imgZ, Q);
+		sycl::free(_Ydct, Q);
+		sycl::free(_mcosine, Q);
+		sycl::free(_alpha, Q);
+		sycl::free(_msg, Q);
 	};
 }
 
@@ -351,30 +374,54 @@ void decoder(char *file_in, char *msg_decoded, int msg_len, sycl::queue &Q)
 	uint8_t *im = (uint8_t *)loadPNG(file_in, &w, &h);
 
 	{
-		auto size = sycl::range<1>(w * h);
-		sycl::buffer<uint8_t, 1> imgIn(im, size);
-		sycl::buffer<float, 1> imgX(size);
-		sycl::buffer<float, 1> imgY(size);
-		sycl::buffer<float, 1> imgZ(size);
-		sycl::buffer<float, 1> Ydct(sycl::range<1>(w * h));
-		sycl::buffer<float, 1> mcosine(sycl::range<1>(8 * 8));
-		sycl::buffer<float, 1> alpha(sycl::range<1>(8));
-		sycl::buffer<char, 1> msg(msg_decoded, sycl::range<1>(msg_len));
+		// auto size = sycl::range<1>(w * h);
+		// sycl::buffer<uint8_t, 1> imgIn(im, size);
+		// sycl::buffer<float, 1> imgX(size);
+		// sycl::buffer<float, 1> imgY(size);
+		// sycl::buffer<float, 1> imgZ(size);
+		// sycl::buffer<float, 1> Ydct(sycl::range<1>(w * h));
+		// sycl::buffer<float, 1> mcosine(sycl::range<1>(8 * 8));
+		// sycl::buffer<float, 1> alpha(sycl::range<1>(8));
+		// sycl::buffer<char, 1> msg(msg_decoded, sycl::range<1>(msg_len));
 		
+		uint8_t* _imgIn = sycl::malloc_device<uint8_t>(w * h, Q);//memset
+		float* _imgX = sycl::malloc_device<float>(w * h, Q);
+		float* _imgY = sycl::malloc_device<float>(w * h, Q);
+		float* _imgZ = sycl::malloc_device<float>(w * h, Q);
+		float* _Ydct = sycl::malloc_device<float>(w * h, Q);
+		float* _mcosine = sycl::malloc_device<float>(8 * 8, Q);
+		float* _alpha = sycl::malloc_device<float>(8, Q);
+		char* _msg = sycl::malloc_device<char>(msg_len, Q);
+
+		Q.memcpy(_imgIn, im, sizeof(uint8_t) * (w * h));
+
 		// Create imRGB & imYCrCb
 
-		get_dct8x8_params(mcosine, alpha, Q);
+		get_dct8x8_params(_mcosine, _alpha, Q);
 
 		double start = omp_get_wtime();
 
 		// im2imRGB(im, w, h, &imRGB);
 		// rgb2ycbcr(&imRGB, &imYCrCb, Q);
-		im2ycbcr(imgIn, imgX, imgY, imgZ, w, h, Q);
-		dct8x8_2d(imgX, Ydct, w, h, mcosine, alpha, Q);
+		im2ycbcr(_imgIn, _imgX, _imgY, _imgZ, w, h, Q);
+		dct8x8_2d(_imgX, _Ydct, w, h, _mcosine, _alpha, Q);
 
-		extract_msg(Ydct, w, h, msg, msg_len, Q);
+		extract_msg(_Ydct, w, h, _msg, msg_len, Q);
 
 		double stop = omp_get_wtime();
+
+		Q.memcpy(msg_decoded, _msg, sizeof(char) * (msg_len));
+
 		printf("Decoding time=%f sec.\n", stop - start);
+
+		sycl::free(_imgIn, Q);
+		sycl::free(_imgX, Q);
+		sycl::free(_imgY, Q);
+		sycl::free(_imgZ, Q);
+		sycl::free(_Ydct, Q);
+		sycl::free(_mcosine, Q);
+		sycl::free(_alpha, Q);
+		sycl::free(_msg, Q);
+	
 	};
 }
