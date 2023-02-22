@@ -46,7 +46,7 @@ int main(int argc, char **argv)
 	// Extract msg from image
 	msg_decoded = (char*)malloc(msg_len);
 	decoder(file_out, msg_decoded, msg_len, Q);
-	char output_path[20] = "logo_out.png";
+	char output_path[30] = ".\\imgs\\Out\\logo_out.png";
 	msg2logo(output_path, msg_decoded, msg_len);
 
 	return(0);
