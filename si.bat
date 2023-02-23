@@ -1,1 +1,1 @@
-icpx -fsycl -Wall -O2 .\samples\main.cpp -o .\samples\p.exe && .\samples\p.exe
+icpx -fsycl -fopenmp -Wall -O2 -g .\org_src\main.c .\org_src\io_routines.c .\org_src\stegano_routines.c -o .\builds\stegano.exe && .\builds\stegano.exe .\imgs\Out\myout.png

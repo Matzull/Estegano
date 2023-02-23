@@ -22,7 +22,7 @@ int main(int argc, char **argv)
 {
 	char file_in[20], file_out[20], file_logo[20];
 
-	if (argc<3){
+	if (argc<1){
 		printf("./exec image_in.png logo.png image_out.png\n");
 		return(-1);
 	}
@@ -41,7 +41,7 @@ int main(int argc, char **argv)
 	syclInit(Q);
 
 	// Encode the msg into image
-	encoder(file_in, file_out, msg, msg_len, Q);
+	//encoder(file_in, file_out, msg, msg_len, Q);
 
 	// Extract msg from image
 	msg_decoded = (char*)malloc(msg_len);
