@@ -244,8 +244,8 @@ void insert_msg(
 				auto c = item[0];
 				auto b = item[1];
 
-				int bi = 0;
-				int bj = 0;
+				int bi = (c * 8 + b) / bsJ;
+				int bj = (c * 8 + b) % bsJ;
 				
 				char ch = _msg[c];
 				char bit = (ch & (1 << b)) >> b;
@@ -264,18 +264,12 @@ void insert_msg(
 					_img[(stride_i + i_insert) * width + stride_j + j_insert] = fabsf(mean); //+
 				else
 					_img[(stride_i + i_insert) * width + stride_j + j_insert] = -1.0f * fabsf(mean); //-
-
-				bj++;
-				if (bj >= bsJ)
-				{
-					bj = 0;
-					bi++;
-				}
 			});
 		}).wait();	
 	};
 }
 
+/**/
 void insert_msg(float *img, int width, int height, char *msg, int msg_length)
 {
 	int i_insert=3;
@@ -323,61 +317,7 @@ void insert_msg(float *img, int width, int height, char *msg, int msg_length)
 			}
 		}
 }
-
-void extract_msg(float *img, int width, int height, char *msg, int msg_length)
-{
-	int i_insert=3;
-	int j_insert=4;
-
-	int bM=8;
-	int bN=8;
-		
-	int bsI = height/bM;
-	int bsJ = width/bN;
-	int bi = 0;
-	int bj = 0;
-	printf("bsj is: %d width: %d bn", bsJ, width, bN);
-	for(int c=0; c<msg_length; c++){
-		char ch=0;
-
-		for(int b=0; b<8; b++)
-		{
-			int bit;
-
-
-			int stride_i = bi * bM;
-			int stride_j = bj * bN;
-			float tmp = 0.0;
-			for (int ii=0; ii < bM; ii++) 
-			{
-				for (int jj=0; jj < bN; jj++)
-					tmp += img[(stride_i+ii)*width + stride_j+jj];
-			}
-			float mean = tmp/(bM*bN);
-
-			if (c % 25 == 0 && b % 3 == 0)
-			{
-				printf("C: %d B: %d Bi: %d Bj: %d\n", c, b, bi, bj);
-			}
-			
-
-			if (img[(stride_i+i_insert)*width + stride_j+j_insert]>0.5f*mean)
-				bit = 1;
-			else
-				bit = 0;
-
-			ch = (bit<<b)|ch;
-	
-			bj++;
-			if (bj>=bsJ){
-				bj=0;
-				bi++;
-			}
-		}
-		msg[c] = ch;
-	}
-}
-
+/**/
 
 void extract_msg(
 					float* _img,
@@ -432,6 +372,7 @@ void extract_msg(
 	};
 }
 
+
 void encoder(char *file_in, char *file_out, char *c_msg, int msg_len, sycl::queue &Q)
 {
 
@@ -440,16 +381,7 @@ void encoder(char *file_in, char *file_out, char *c_msg, int msg_len, sycl::queu
 	uint8_t *im = (uint8_t *)loadPNG(file_in, &w, &h);
 	uint8_t *im_out = (uint8_t *)malloc(3 * w * h);
 	{
-		// auto size = sycl::range<1>(w * h);
-		// sycl::buffer<uint8_t, 1> imgIn(im, size);
-		// sycl::buffer<float, 1> imgX(size);
-		// sycl::buffer<float, 1> imgY(size);
-		// sycl::buffer<float, 1> imgZ(size);
-		// sycl::buffer<uint8_t, 1> imgOut(im_out, size);
-		// sycl::buffer<float, 1> Ydct(sycl::range<1>(w * h));
-		// sycl::buffer<float, 1> mcosine(sycl::range<1>(8 * 8));
-		// sycl::buffer<float, 1> alpha(sycl::range<1>(8));
-		// sycl::buffer<char, 1> msg(c_msg, sycl::range<1>(msg_len));
+
 		uint8_t* _imgIn = sycl::malloc_device<uint8_t>(3 * w * h, Q);//memset
 		float* _imgX = sycl::malloc_device<float>(w * h, Q);
 		float* _imgY = sycl::malloc_device<float>(w * h, Q);
@@ -474,12 +406,22 @@ void encoder(char *file_in, char *file_out, char *c_msg, int msg_len, sycl::queu
 		dct8x8_2d(_imgX, _Ydct, w, h, _mcosine, _alpha, Q);
 
 		// Insert Message
-		insert_msg(_Ydct, h, w, _msg, msg_len, Q);
-		
-		// printf("msglen: %d\n", msg_len);
+		//insert_msg(_Ydct, h, w, _msg, msg_len, Q);
 
-		
-		idct8x8_2d(_Ydct, _imgX, w, h, _mcosine, _alpha, Q);	
+		float* Ydct = (float*)malloc(w * h * sizeof(float));
+		float* imgX = (float*)malloc(w * h * sizeof(float));
+		float* mcosine = (float*)malloc(8 * 8 * sizeof(float));
+		float* alpha = (float*)malloc(w * h * sizeof(float));
+
+		Q.memcpy(imgX, _imgX, w * h * sizeof(float));
+		Q.memcpy(mcosine, _mcosine, 8 * 8 * sizeof(float));
+		Q.memcpy(alpha, _alpha, 8 * sizeof(float));
+		Q.memcpy(Ydct, _Ydct, w * h * sizeof(float));
+		insert_msg(Ydct, h, w, c_msg, msg_len);
+		idct8x8_2d(Ydct, imgX, w, h, mcosine, alpha);
+		Q.memcpy(_imgX, imgX, w * h * sizeof(float));
+
+		//idct8x8_2d(_Ydct, _imgX, w, h, _mcosine, _alpha, Q);	
 
 		ycbcr2im(_imgOut, _imgX, _imgY, _imgZ, w, h, Q);
 
@@ -530,38 +472,13 @@ void decoder(char *file_in, char *msg_decoded, int msg_len, sycl::queue &Q)
 
 		im2ycbcr(_imgIn, _imgX, _imgY, _imgZ, w, h, Q);
 		
-		//dct8x8_2d(_imgX, _Ydct, w, h, _mcosine, _alpha, Q);
-
-
-		float* Ydct = (float*)malloc(w * h * sizeof(float));
-		float* imgX = (float*)malloc(w * h * sizeof(float));
-		float* mcosine = (float*)malloc(8 * 8 * sizeof(float));
-		float* alpha = (float*)malloc(w * h * sizeof(float));
-
-		Q.memcpy(imgX, _imgX, w * h * sizeof(float));
-		Q.memcpy(mcosine, _mcosine, 8 * 8 * sizeof(float));
-		Q.memcpy(alpha, _alpha, 8 * sizeof(float));
-		Q.memcpy(Ydct, _Ydct, w * h * sizeof(float));
-
-		dct8x8_2d(imgX, Ydct, w, h, mcosine, alpha);
-		//extract_msg(Ydct, w, h, msg_decoded, msg_len);
-		Q.memcpy(_Ydct, Ydct, w * h * sizeof(float));
-		
-		
-		// Q.memcpy(_msg, c_msg, msg_len);
-		// Q.memcpy(_imgX, imgX, w * h * sizeof(float));
-		// Q.memcpy(_imgY, imgY, w * h * sizeof(float));
-		// Q.memcpy(_imgZ, imgZ, w * h * sizeof(float));
-		// Q.memcpy(_mcosine, mcosine, 8 * 8 * sizeof(float));
-		// Q.memcpy(_alpha, alpha, 8 * sizeof(float));
+		dct8x8_2d(_imgX, _Ydct, w, h, _mcosine, _alpha, Q);
 
 		extract_msg(_Ydct, w, h, _msg, msg_len, Q);
 
 		double stop = omp_get_wtime();
 		printf("Decoding time=%f sec.\n", stop - start);
 		Q.memcpy(msg_decoded, _msg, msg_len);
-
-		
 
 		sycl::free(_imgIn, Q);
 		sycl::free(_imgX, Q);

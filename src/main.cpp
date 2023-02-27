@@ -41,7 +41,7 @@ int main(int argc, char **argv)
 	syclInit(Q);
 
 	// Encode the msg into image
-	//encoder(file_in, file_out, msg, msg_len, Q);
+	encoder(file_in, file_out, msg, msg_len, Q);
 
 	// Extract msg from image
 	msg_decoded = (char*)malloc(msg_len);
