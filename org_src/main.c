@@ -25,10 +25,10 @@ int main(int argc, char **argv)
 	encoder(".\\imgs\\image_skyscraper.png", file_out, msg, msg_len);
 
 	// Extract msg from image
-	// msg_decoded = (char*)malloc(msg_len);
-	// decoder(file_out, msg_decoded, msg_len);
-	// printf("Message len: %d", msg_len);
-	// msg2logo(".\\imgs\\Out\\logo_out.png", msg_decoded, msg_len);
+	msg_decoded = (char*)malloc(msg_len);
+	decoder(file_out, msg_decoded, msg_len);
+	printf("Message len: %d", msg_len);
+	msg2logo(".\\imgs\\Out\\logo_out.png", msg_decoded, msg_len);
 
 	return(0);
 }

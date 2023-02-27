@@ -189,8 +189,11 @@ void insert_msg(float *img, int width, int height, char *msg, int msg_length)
 					tmp += img[(stride_i+ii)*width + stride_j+jj];
 			}
 			float mean = tmp/(bM*bN);
-			
-//			img[(bi+i_insert)*width + bj+j_insert] = (float)(bit)*img[(bi+i_insert)*width + bj+j_insert];
+			// if (c % 64 == 0)
+			// {
+			// 	printf("Item: %d Mean: %f\n", c, mean);
+			// }
+
 
 			if (bit) 
 				img[(stride_i+i_insert)*width + stride_j+j_insert] = fabsf(mean); //+
@@ -282,8 +285,12 @@ void encoder(char *file_in, char *file_out, char *msg, int msg_len)
 
 	im2imRGB(im, w, h, &imRGB);
 	rgb2ycbcr(&imRGB, &imYCrCb);
-	dct8x8_2d(imYCrCb.Y, Ydct, imYCrCb.w, imYCrCb.h, mcosine, alpha);
 
+	dct8x8_2d(imYCrCb.Y, Ydct, imYCrCb.w, imYCrCb.h, mcosine, alpha);
+	// for (int i = 0; i < w * h; i +=100000)
+	// {
+	// 	printf("Value is: %f\n", Ydct[i]);
+	// }
 	// Insert Message		
 	insert_msg(Ydct, imYCrCb.w, imYCrCb.h, msg, msg_len);
 
@@ -318,7 +325,7 @@ void decoder(char *file_in, char *msg_decoded, int msg_len)
 	imRGB.B = (float*)malloc(w*h*sizeof(float));
 	t_sYCrCb imYCrCb;
 	imYCrCb.Y  = (float*)malloc(w*h*sizeof(float));
-	imYCrCb.Cr = (float*)malloc(w*h*sizeof(float));
+	imYCrCb.Cr = (float*)malloc(w*h*sizeof(float)); 
 	imYCrCb.Cb = (float*)malloc(w*h*sizeof(float));
 	float *Ydct= (float*)malloc(w*h*sizeof(float));
 

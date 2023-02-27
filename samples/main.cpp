@@ -1,26 +1,47 @@
-#include <sycl/sycl.hpp>
 #include <iostream>
+
+void ycbcr2rgb(float* imY, float* imCb, float* imCr, int w, int h){
+
+	for (int i = 0; i < h; i++) {
+		for (int j = 0; j < w; j++) {
+
+			// Use standard coeficient
+			out->R[i*w+j] = in->Y[i*w+j]                                 + 1.402*(in->Cb[i*w+j]-128.0);
+			out->G[i*w+j] = in->Y[i*w+j] - 0.34414*(in->Cr[i*w+j]-128.0) - 0.71414*(in->Cb[i*w+j]-128.0); 
+			out->B[i*w+j] = in->Y[i*w+j] + 1.772*(in->Cr[i*w+j]-128.0);
+			
+			// After translate we must check if RGB component is in [0...255]
+			if (out->R[i*w+j] < 0) out->R[i*w+j] = 0;
+			else if (out->R[i*w+j] > 255) out->R[i*w+j] = 255;
+
+			if (out->G[i*w+j] < 0) out->G[i*w+j] = 0;
+			else if (out->G[i*w+j] > 255) out->G[i*w+j] = 255;
+
+			if (out->B[i*w+j] < 0) out->B[i*w+j]= 0;
+			else if (out->B[i*w+j] > 255) out->B[i*w+j] = 255;
+		}
+	}
+}
+
+
+void imRGB2im(t_sRGB *imRGB, uint8_t *im, int *w, int *h)
+{
+	int w_ = imRGB->w;
+	*w = imRGB->w;
+	*h = imRGB->h;
+
+	for (int i=0; i<*h; i++)
+		for (int j=0; j<*w; j++)
+		{
+			im[3*(i*w_+j)  ] = imRGB->R[i*w_+j];
+			im[3*(i*w_+j)+1] = imRGB->G[i*w_+j];  
+			im[3*(i*w_+j)+2] = imRGB->B[i*w_+j];    
+		}                    
+}
 
 int main(int argc, char **argv) {
 
-	std::cout << "Starting" << std::endl;
-	sycl::queue Q{sycl::device{sycl::default_selector_v}};
 
-	std::cout << "Running on "
-		<< Q.get_device().get_info<sycl::info::device::name>()
-		<< std::endl;
-
-	Q.submit([&](sycl::handler &cgh) {
-		// Create a output stream
-		sycl::stream sout(1024, 256, cgh);
-		// Submit a unique task, using a lambda
-		cgh.parallel_for(sycl::range<1>(10), [=](sycl::id<1> item) {
-			sout << "Hello, World!" << sycl::endl;
-		}); // End of the kernel function
-	}).wait();   // End of the queue commands. The kernel is now submited
-	printf("Hey\n");
-	// wait for all queue submissions to complete
-	Q.wait();
 
 
   return 0;
