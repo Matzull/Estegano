@@ -1,0 +1,1 @@
+./builds/stegano.out ./imgs/image_skyscraper.png ./imgs/logo_out.png ./imgs/Out/myout.png

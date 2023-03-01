@@ -1,0 +1,1 @@
+icpx -fsycl -fopenmp -Wall -O2 -g ./src/main.cpp ./src/io_routines.cpp ./src/stegano_routines.cpp -o ./builds/stegano.out && ./builds/stegano.out ./imgs/image_skyscraper.png ./imgs/logo_out.png ./imgs/Out/myout.png

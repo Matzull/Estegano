@@ -1,1 +1,0 @@
-icpx -fsycl -fopenmp -Wall -Ofast -g .\org_src\main.c .\org_src\io_routines.c .\org_src\stegano_routines.c -o .\builds\stegano.exe && .\builds\stegano.exe .\imgs\image_skyscraper.png .\imgs\logo_out.png .\imgs\Out\myout.png

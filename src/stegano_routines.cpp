@@ -8,7 +8,7 @@
 #include "io_routines.h"
 #include "stegano_routines.h"
 
-#define M_PI 3.14159265358979323846 /* pi */
+#define _PI 3.14159265358979323846f /* pi */
 
 float clamp(float value, float min, float max)
 {
@@ -28,9 +28,9 @@ void im2ycbcr(
 		Q.submit([&](sycl::handler &h){
 			h.parallel_for(sycl::range<1>(height * width), [=](sycl::id<1> item){
 				int t_i = item + item + item;
-				_imgX[item] = 0.299 * _imgIn[t_i] + 0.587 * _imgIn[t_i + 1] + 0.114 * _imgIn[t_i + 2];
-				_imgY[item] = 128.0 + 0.5 * _imgIn[t_i] - 0.418688 * _imgIn[t_i + 1] - 0.081312 * _imgIn[t_i + 2];
-				_imgZ[item] = 128.0 - 0.168736 * _imgIn[t_i] - 0.3331264 * _imgIn[t_i + 1] + 0.5 * _imgIn[t_i + 2];
+				_imgX[item] = 0.299f * _imgIn[t_i] + 0.587f * _imgIn[t_i + 1] + 0.114f * _imgIn[t_i + 2];
+				_imgY[item] = 128.0f + 0.5f * _imgIn[t_i] - 0.418688f * _imgIn[t_i + 1] - 0.081312f * _imgIn[t_i + 2];
+				_imgZ[item] = 128.0f - 0.168736f * _imgIn[t_i] - 0.3331264f * _imgIn[t_i + 1] + 0.5f * _imgIn[t_i + 2];
 			});
 		}).wait();
 	};
@@ -49,11 +49,11 @@ void ycbcr2im(
 		Q.submit([&](sycl::handler &h){
 
 			h.parallel_for(sycl::range<1>(width * height), [=](sycl::id<1> item){
-				auto t_i = (int)item + (int)item + (int)item;
+				int t_i = (int)item + (int)item + (int)item;
 				
-				_imgOut[t_i] 	 = clamp(_imgX[item] + 1.402 * (_imgY[item] - 128.0), 0, 255);
-				_imgOut[t_i + 1] = clamp(_imgX[item] - 0.34414 * (_imgZ[item] - 128.0) - 0.71414 * (_imgY[item] - 128.0), 0, 255);
-				_imgOut[t_i + 2] = clamp(_imgX[item] + 1.772 * (_imgZ[item] - 128.0), 0, 255);
+				_imgOut[t_i] 	 = clamp(_imgX[item] + 1.402f * (_imgY[item] - 128.0f), 0, 255);
+				_imgOut[t_i + 1] = clamp(_imgX[item] - 0.34414f * (_imgZ[item] - 128.0f) - 0.71414f * (_imgY[item] - 128.0f), 0, 255);
+				_imgOut[t_i + 2] = clamp(_imgX[item] + 1.772f * (_imgZ[item] - 128.0f), 0, 255);
 			});
 		}).wait();
 	};
@@ -63,7 +63,7 @@ void get_dct8x8_params(float* _mcosine, float* _alpha, sycl::queue& Q)
 {
 	int bM = 8;
 	int bN = 8;
-	{
+	
 		Q.submit([&](sycl::handler &h){
 
 			h.single_task([=](){
@@ -71,7 +71,7 @@ void get_dct8x8_params(float* _mcosine, float* _alpha, sycl::queue& Q)
 				{
 					for (int j = 0; j < bN; j++)
 					{
-						_mcosine[i * bN + j] = cos(((2 * i + 1) * M_PI * j) / (2 * bM));
+						_mcosine[i * bN + j] = cos(((2 * i + 1) * _PI * j) / (2 * bM));
 					}
 				}
 				_alpha[0] = 1 / sqrt(bM * 1.0f);
@@ -81,7 +81,7 @@ void get_dct8x8_params(float* _mcosine, float* _alpha, sycl::queue& Q)
 				}
 			});
 		}).wait();
-	};
+	
 	
 }
 

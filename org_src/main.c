@@ -14,21 +14,24 @@ int main(int argc, char **argv)
 		return(-1);
 	}
 
-	strcpy_s(file_in, strlen(argv[1]) + 1, argv[1]);
-	strcpy_s(file_logo, strlen(argv[2]) + 1, argv[2]);
-	strcpy_s(file_out, strlen(argv[3]) + 1, argv[3]);
+// 	strcpy_s(file_in, strlen(argv[1]) + 1, argv[1]);
+// 	strcpy_s(file_logo, strlen(argv[2]) + 1, argv[2]);
+// 	strcpy_s(file_out, strlen(argv[3]) + 1, argv[3]);
+    strcpy(file_in, argv[1]);
+	strcpy(file_logo, argv[2]);
+	strcpy(file_out, argv[3]);
 
 	char *msg, *msg_decoded;
 	int msg_len;
-	get_msg(".\\imgs\\logo_out.png", &msg, &msg_len);
+	get_msg(file_logo, &msg, &msg_len);
 
-	encoder(".\\imgs\\image_skyscraper.png", file_out, msg, msg_len);
+	encoder(file_in, file_out, msg, msg_len);
 
 	// Extract msg from image
 	msg_decoded = (char*)malloc(msg_len);
 	decoder(file_out, msg_decoded, msg_len);
-	printf("Message len: %d", msg_len);
-	msg2logo(".\\imgs\\Out\\logo_out.png", msg_decoded, msg_len);
+	char output_path[30] = "./imgs/Out/logo_out.png";
+	msg2logo(output_path, msg_decoded, msg_len);
 
 	return(0);
 }

@@ -7,7 +7,7 @@
 #include "io_routines.h"
 #include "stegano_routines.h"
 
-# define M_PI           3.14159265358979323846  /* pi */
+# define M_PI           3.14159265358979323846f  /* pi */
 
 
 void im2imRGB(uint8_t *im, int w, int h, t_sRGB *imRGB)
@@ -51,9 +51,9 @@ void rgb2ycbcr(t_sRGB *in, t_sYCrCb *out)
 		for (int j = 0; j < in->w; j++) {
 
 			// Use standard coeficient
-			out->Y[i*w+j]  =         0.299*in->R[i*w+j]     + 0.587*in->G[i*w+j]      + 0.114*in->B[i*w+j];
-			out->Cr[i*w+j] = 128.0 - 0.168736*in->R[i*w+j]  - 0.3331264*in->G[i*w+j]  + 0.5*in->B[i*w+j] ;
-			out->Cb[i*w+j] = 128.0 + 0.5*in->R[i*w+j]       - 0.418688*in->G[i*w+j]   - 0.081312*in->B[i*w+j];
+			out->Y[i*w+j]  =         0.299f*in->R[i*w+j]     + 0.587f*in->G[i*w+j]      + 0.114f*in->B[i*w+j];
+			out->Cr[i*w+j] = 128.0f - 0.168736f*in->R[i*w+j]  - 0.3331264f*in->G[i*w+j]  + 0.5f*in->B[i*w+j] ;
+			out->Cb[i*w+j] = 128.0f + 0.5f*in->R[i*w+j]       - 0.418688f*in->G[i*w+j]   - 0.081312f*in->B[i*w+j];
 		}
 	}
 }
@@ -69,9 +69,9 @@ void ycbcr2rgb(t_sYCrCb *in, t_sRGB *out){
 		for (int j = 0; j < in->w; j++) {
 
 			// Use standard coeficient
-			out->R[i*w+j] = in->Y[i*w+j]                                 + 1.402*(in->Cb[i*w+j]-128.0);
-			out->G[i*w+j] = in->Y[i*w+j] - 0.34414*(in->Cr[i*w+j]-128.0) - 0.71414*(in->Cb[i*w+j]-128.0); 
-			out->B[i*w+j] = in->Y[i*w+j] + 1.772*(in->Cr[i*w+j]-128.0);
+			out->R[i*w+j] = in->Y[i*w+j]                                 + 1.402f*(in->Cb[i*w+j]-128.0f);
+			out->G[i*w+j] = in->Y[i*w+j] - 0.34414f*(in->Cr[i*w+j]-128.0f) - 0.71414f*(in->Cb[i*w+j]-128.0f); 
+			out->B[i*w+j] = in->Y[i*w+j] + 1.772f*(in->Cr[i*w+j]-128.0f);
 			
 			// After translate we must check if RGB component is in [0...255]
 			if (out->R[i*w+j] < 0) out->R[i*w+j] = 0;
